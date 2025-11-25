@@ -1,0 +1,83 @@
+# Nom "humà" del workflow. Així és com el veurem a la pestanya Actions.
+name: CI (Laravel)
+
+# Bloc que defineix QUAN s’executa el workflow.
+on:
+  # 1) Es dispara en fer push...
+  push:
+    # ...però només si el push va a la branca 'main'.
+    # YAML permet arrays en una sola línia: [ main ] és equivalent a una llista amb un element.
+    branches: [ main ]
+  # 2) També es dispara quan s’obre/actualitza un pull request.
+  # No especifiquem branques aquí, per tant s’aplica a PRs entre qualsevol branca.
+  pull_request:
+
+# Bloc de feines (jobs) que s’executaran.
+jobs:
+  # Definim un job anomenat 'tests' (el nom és lliure; aquí indica que farà proves).
+  tests:
+    # Indiquem a GitHub quin tipus de màquina virtual ha d’usar.
+    # 'ubuntu-latest' és l’últim Ubuntu que ofereix GitHub (normalment la millor opció per PHP).
+    runs-on: ubuntu-latest
+
+    # Llista ordenada de passos dins del job 'tests'.
+    steps:
+      # Pas 1: descarregar el codi del repositori al runner.
+      - name: Checkout
+        # 'uses' vol dir que fem servir una "action" pública del Marketplace.
+        # actions/checkout@v4 clona el repo a la màquina del job.
+        uses: actions/checkout@v4
+
+      # Pas 2: instal·lar PHP i extensions necessàries per a Laravel.
+      - name: Set up PHP
+        # Action específica per gestionar versions/ext dels PHP Runtimes.
+        uses: shivammathur/setup-php@v2
+        # 'with' passa paràmetres a l'action.
+        with:
+          # Versió de PHP que volem al runner.
+          php-version: '8.2'
+          # Llista d’extensions que necessitem al projecte.
+          # mbstring i bcmath són habituals a Laravel; pdo_sqlite per fer tests amb SQLite.
+          extensions: mbstring, bcmath, pdo_sqlite
+          # Desactivem la cobertura (xdebug) per fer el job més ràpid.
+          coverage: none
+
+      # Pas 3: cachejar el directori 'vendor' perquè els 'composer install' siguin molt més ràpids
+      # a execucions futures si no canvia el lockfile.
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          # 'path' indica què volem cachejar: el directori de dependències PHP.
+          path: vendor
+          # 'key' identifica la "clau" del cache. Si canvia, es crea un cache nou.
+          # Fem servir una expressió de GitHub ${{ ... }} per construir la clau.
+          # Afegim el sistema operatiu i el hash del composer.lock (si canvia, el cache deixa de servir).
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+
+      # Pas 4: instal·lar les dependències de Composer del projecte.
+      - name: Install Composer dependencies
+        # 'run' executa una comanda de shell a la màquina del job.
+        # --no-progress: menys soroll als logs
+        # --prefer-dist: baixa paquets ja empaquetats (més ràpid)
+        # --optimize-autoloader: millora el temps de càrrega en producció/CI
+        run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+      # Pas 5: preparar l’entorn de proves.
+      - name: Prepare environment
+        # El tub '|' indica "multilínia": executarem aquestes comandes, una rere l’altra, al mateix pas.
+        run: |
+          # 5.1 Copiem l'exemple d'entorn a .env (a CI no exposem secrets; usem defaults).
+          cp .env.example .env
+          # 5.2 Generem l’APP_KEY necessària per a Laravel (encriptació, sessions, etc.).
+          php artisan key:generate
+          # 5.3 Creem la base de dades SQLite (fitxer buit). Ideal per a tests en CI.
+          touch database/database.sqlite
+          # 5.4 Apliquem migracions perquè les taules existeixin abans de provar.
+          # --force evita que Artisan demani confirmació en entorns no interactius.
+          php artisan migrate --force
+
+      # Pas 6: executar els tests de Laravel.
+      - name: Run tests
+        # --no-coverage: no calculem cobertura (més ràpid per a una demo bàsica).
+        # (Laravel invoca PHPUnit o Pest segons la config del projecte.)
+        run: php artisan test --no-coverage
