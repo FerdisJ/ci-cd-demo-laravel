@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <h1>📋 Llista de tasques modificada</h1>
+  <h1>📋 Llista de tasques modificada 2</h1>
 
   <form method="POST" action="{{ route('tasks.store') }}">
     @csrf
