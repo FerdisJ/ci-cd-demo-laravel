@@ -1,0 +1,18 @@
+# Ignorar archivos y directorios innecesarios en la imagen Docker
+.git
+.github
+.gitignore
+.env
+.env.example
+node_modules
+npm-debug.log
+vendor
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+tests
+phpunit.xml
+.phpunit.result.cache
+docker-compose.yml
+README.md
