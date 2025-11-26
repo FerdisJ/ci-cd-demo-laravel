@@ -1,65 +1,35 @@
-# Etapa 1: Construcción
-FROM php:8.2-fpm as build
-
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
-
-# Instalar Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Establecer directorio de trabajo
-WORKDIR /var/www/html
-
-# Copiar archivos de dependencias
-COPY composer.json composer.lock ./
-
-# Instalar dependencias de PHP (sin dev)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
-
-# Copiar el resto de la aplicación
-COPY . .
-
-# Generar clave de aplicación y optimizar
-RUN php artisan config:cache && \
-    php artisan route:cache && \
-    php artisan view:cache
-
-# Etapa 2: Producción
+# Imagen base con PHP-FPM
 FROM php:8.2-fpm
 
-# Instalar extensiones necesarias
+# Instalar dependencias del sistema necesarias para Laravel y Composer
 RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    zip \
+    libzip-dev \
     libpng-dev \
     libonig-dev \
     libxml2-dev \
-    nginx \
-    supervisor \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && docker-php-ext-install pdo pdo_mysql zip mbstring gd
 
-# Copiar archivos desde la etapa de build
+# Instalar Composer desde la imagen oficial
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Directorio de trabajo
 WORKDIR /var/www/html
-COPY --from=build /var/www/html /var/www/html
 
-# Copiar configuración de nginx
-COPY docker/nginx/default.conf /etc/nginx/sites-available/default
+# Copiamos solo composer.* primero (para aprovechar la caché de Docker)
+COPY composer.json composer.lock* ./
 
-# Copiar configuración de supervisor
-COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# Instalamos dependencias de PHP (puedes dejar con dev de momento)
+RUN composer install --no-interaction --prefer-dist --no-progress
 
-# Establecer permisos
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Ahora copiamos el resto del código
+COPY . .
 
-# Exponer puerto
-EXPOSE 80
+# Permisos para Laravel
+RUN chown -R www-data:www-data storage bootstrap/cache
 
-# Comando de inicio
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+EXPOSE 9000
+
+CMD ["php-fpm"]
