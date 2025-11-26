@@ -67,4 +67,4 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/tasks-laravel:latest
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/task-manager:latest
